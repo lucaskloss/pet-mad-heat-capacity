@@ -23,6 +23,7 @@ DEFAULT_VERSION = os.environ.get("PET_MAD_VERSION", "1.0.2")
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, default=SCRIPT_DIR / "models" / f"pet-mad-s-v{DEFAULT_VERSION}.pt")
     parser.add_argument("--model-version", default=DEFAULT_VERSION)
@@ -44,39 +45,52 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prefix", default="water-pet-mad-cv", help="output filename stem inside --output-dir")
     parser.add_argument("--rerun", action="store_true", help="rerun even if <prefix>.out exists")
     parser.add_argument("--analyze", action="store_true", help="only analyze an existing <prefix>.out")
+
     return parser.parse_args()
 
 
 def main() -> None:
+    """Run PET-MAD/i-PI/LAMMPS PIMD and estimate water heat capacity."""
     args = parse_args()
     water_path = args.water.expanduser().resolve()
     template_path = args.lammps_template.expanduser().resolve()
     output_dir = args.output_dir.expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     prefix_name = Path(args.prefix).name
+
     if not prefix_name or prefix_name in {".", ".."}:
         raise ValueError("--prefix must contain a valid output filename stem")
+    
     output_prefix = output_dir / prefix_name
     output_file = Path(f"{output_prefix}.out")
     xml_file = Path(f"{output_prefix}.xml")
     data_file = Path(f"{output_prefix}.data")
     lammps_input = Path(f"{output_prefix}.lmp")
+
     if not water_path.exists():
         raise FileNotFoundError(f"Water structure not found: {water_path}")
+    
     if not template_path.exists():
         raise FileNotFoundError(f"LAMMPS water template not found: {template_path}")
+    
     water = io.read(water_path)
+
     if water.cell.volume <= 0:
         raise ValueError("The water structure must contain a periodic cell")
+    
     water.pbc = True
     nmolecules = int(np.count_nonzero(water.get_atomic_numbers() == 8))
+
     if nmolecules == 0 or len(water) != 3 * nmolecules:
         raise ValueError("Expected a 3-atom-per-water O/H structure")
+    
     if not args.analyze and (args.rerun or not output_file.exists()):
         default_model = SCRIPT_DIR / "models" / f"pet-mad-s-v{DEFAULT_VERSION}.pt"
         model_path = args.model
+
         if model_path.expanduser().resolve() == default_model.resolve():
             model_path = SCRIPT_DIR / "models" / f"pet-mad-{args.model_size}-v{args.model_version}.pt"
+
         model_path = ensure_model(model_path, version=args.model_version, size=args.model_size)
         socket_name = f"pet-mad-{os.getpid()}-{time.time_ns()}"
         xml_file.write_text(build_input_xml(water_path, temperature=args.temperature, beads=args.beads,
@@ -89,10 +103,13 @@ def main() -> None:
         print(f"Running {args.beads}-bead PET-MAD PIMD for {args.steps} steps with {args.clients} LAMMPS clients")
         run_lammps_socket(xml_file, lammps_input, socket_name=socket_name, clients=args.clients,
                           ipi_command=args.ipi, lammps_command=args.lammps)
+        
     elif not output_file.exists():
         raise FileNotFoundError(f"{output_file} does not exist; run the simulation first")
+    
     else:
         print(f"Reusing existing output: {output_file}")
+
     eps_v, eps_v_prime = read_scaledcoords(output_file, args.fd_delta)
     result = heat_capacity_from_scaledcoords(eps_v, eps_v_prime, temperature=args.temperature,
                                              nmolecules=nmolecules, skip=args.skip)

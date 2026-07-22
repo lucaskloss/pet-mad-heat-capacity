@@ -1,5 +1,3 @@
-"""PET-MAD model preparation helpers."""
-
 from pathlib import Path
 import upet
 

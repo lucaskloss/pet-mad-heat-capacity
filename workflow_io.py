@@ -11,8 +11,10 @@ import numpy as np
 def build_input_xml(water_path: Path, *, temperature: float, beads: int, steps: int, timestep_fs: float,
                     output_prefix: Path, output_stride: int, fd_delta: float, socket_name: str) -> str:
     """Build the i-PI XML with an LAMMPS Unix-socket force field."""
+
     if beads < 1 or output_stride < 1 or steps < 1:
         raise ValueError("beads, steps, and output_stride must be positive")
+    
     root = ET.Element("simulation", verbosity="medium", safe_stride="100")
     output = ET.SubElement(root, "output", prefix=str(output_prefix))
     properties = ET.SubElement(output, "properties", filename="out", stride=str(output_stride))
@@ -39,14 +41,17 @@ def build_input_xml(water_path: Path, *, temperature: float, beads: int, steps: 
     ET.SubElement(thermostat, "tau", units="femtosecond").text = "5.0"
     ET.SubElement(dynamics, "timestep", units="femtosecond").text = f"{timestep_fs:g}"
     ET.indent(root, space="  ")
+
     return ET.tostring(root, encoding="unicode")
 
 
 def write_lammps_data(template_path: Path, output_path: Path, water) -> None:
     """Write topology-free O/H LAMMPS data while retaining the original cell."""
     template = io.read(template_path, format="lammps-data", atom_style="full")
+
     if not np.array_equal(template.get_atomic_numbers(), water.get_atomic_numbers()):
         raise ValueError("LAMMPS template and i-PI structure must have identical O/H ordering")
+    
     output_path.parent.mkdir(parents=True, exist_ok=True)
     io.write(output_path, template, format="lammps-data", atom_style="atomic", masses=True, specorder=["O", "H"])
 
@@ -66,9 +71,13 @@ def read_scaledcoords(output_file: Path, fd_delta: float) -> tuple[np.ndarray, n
     expected = f"scaledcoords(fd_delta={fd_delta:g})"
     matching_keys = (candidate for candidate in data if candidate.startswith("scaledcoords("))
     key = expected if expected in data else next(matching_keys, None)
+
     if key is None:
         raise KeyError("No scaledcoords output found. Available columns: " + ", ".join(data))
+    
     values = np.asarray(data[key], dtype=float)
+
     if values.ndim != 2 or values.shape[1] != 2:
         raise ValueError(f"Expected scaledcoords with shape (n, 2), got {values.shape}")
+    
     return values[:, 0], values[:, 1]
