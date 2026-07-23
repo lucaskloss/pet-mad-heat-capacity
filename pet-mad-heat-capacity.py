@@ -16,9 +16,9 @@ from model_utils import ensure_model
 from workflow_io import build_input_xml, read_scaledcoords, write_lammps_data, write_lammps_input
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-HEAT_CAPACITY_DIR = SCRIPT_DIR.parent / "heat-capacity"
-DEFAULT_WATER = HEAT_CAPACITY_DIR / "data" / "water_32.pdb"
-DEFAULT_LAMMPS_TEMPLATE = HEAT_CAPACITY_DIR / "data" / "water_32_data.lmp"
+DATA_DIR = SCRIPT_DIR / "data"
+DEFAULT_WATER = DATA_DIR / "water_32.pdb"
+DEFAULT_LAMMPS_TEMPLATE = DATA_DIR / "water_32_data.lmp"
 DEFAULT_VERSION = os.environ.get("PET_MAD_VERSION", "1.0.2")
 
 
